@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { SyntheticEvent } from "react";
 import { cardImage, splashImage } from "./data/cardArt";
 import { drawCards, getCard, spreads, suitFilters, tarotDeck, topics, type SpreadId, type TarotCard, type Topic } from "./data/tarotDeck";
@@ -142,7 +143,6 @@ function App() {
         scale: 2,
         onclone: (documentClone) => {
           documentClone.getElementById("reading-result")?.classList.add("export-capture");
-          documentClone.querySelectorAll("[data-card-reading]").forEach((element) => element.removeAttribute("hidden"));
         },
       });
       const blob = await new Promise<Blob>((resolve, reject) => {
@@ -270,7 +270,8 @@ function App() {
               <span className="muted">Chạm để lật · {revealedCount}/{reading.cards.length}</span>
               <button className="text-button" onClick={revealAll}>Lật tất cả</button>
             </div>}
-            {allRevealed && <Interpretation key={reading.id} reading={reading} onComplete={setCanExport} exporting={isExporting} />}
+            {allRevealed && <Interpretation key={reading.id} reading={reading} onComplete={setCanExport}
+              exporting={isExporting} canExport={canExport} onDownload={downloadResult} />}
             <p className="export-disclaimer">Tarot mang tính giải trí & suy ngẫm, không thay thế tư vấn chuyên môn.</p>
             <div className="flow-actions center" data-html2canvas-ignore>
               {canExport && <button className="button button-gold" onClick={downloadResult} disabled={isExporting}>{isExporting ? "Đang tạo ảnh…" : "↓ Tải ảnh kết quả"}</button>}
@@ -330,26 +331,98 @@ function CardModal({ card, onClose }: { card: TarotCard; onClose: () => void }) 
   </div>;
 }
 
-function Interpretation({ reading, onComplete, exporting }: {
+function ReadingConclusion({ result }: { result: InterpretationResult }) {
+  return <div className="reading-conclusion">
+    <h3>Kết luận</h3>
+    <div className="message-banner">
+      <span className="message-icon" aria-hidden="true">✦</span><p>{result.overview}</p>
+    </div>
+    <p>{result.synthesis}</p>
+    <h4>Điều bạn có thể làm</h4>
+    <ul className="reading-advice">{result.advice.map((advice) => <li key={advice}>{advice}</li>)}</ul>
+    <p className="reading-reflection">{result.reflectionQuestion}</p>
+    {result.safetyNote && <p className="reading-note">{result.safetyNote}</p>}
+  </div>;
+}
+
+function SupportMessage({ result }: { result: InterpretationResult }) {
+  return <div className="support-message">
+    <div className="message-banner"><p>{result.overview}</p></div>
+    <p>{result.safetyNote}</p>
+    <p>{result.synthesis}</p>
+    <ul className="reading-advice">{result.advice.map((advice) => <li key={advice}>{advice}</li>)}</ul>
+    <p className="reading-reflection">{result.reflectionQuestion}</p>
+  </div>;
+}
+
+function CardMeaning({ reading, result, index }: { reading: ReadingState; result: InterpretationResult; index: number }) {
+  const item = reading.cards[index];
+  const meaning = result.cards[index];
+  return <article className="card-reading" data-card-reading>
+    <p className="eyebrow">{item.position} · {item.isReversed ? "NGƯỢC" : "XUÔI"}</p>
+    <h3>{item.card.name}</h3>
+    <strong className="reading-headline">{meaning.headline}</strong>
+    <p className="reading-meaning">{meaning.interpretation}</p>
+  </article>;
+}
+
+function Interpretation({ reading, onComplete, exporting, canExport, onDownload }: {
   reading: ReadingState;
   onComplete: (complete: boolean) => void;
   exporting: boolean;
+  canExport: boolean;
+  onDownload: () => void;
 }) {
   const [result, setResult] = useState<InterpretationResult | null>(null);
   const [pending, setPending] = useState(false);
   const [interpretationError, setInterpretationError] = useState("");
-  const [revealedCount, setRevealedCount] = useState(0);
-  const [activeIndex, setActiveIndex] = useState(0);
+  const [open, setOpen] = useState(false);
+  const [activeIndex, setActiveIndex] = useState<number | null>(null);
+  const [viewed, setViewed] = useState<number[]>([]);
   const [showConclusion, setShowConclusion] = useState(false);
   const controllerRef = useRef<AbortController | null>(null);
-  const firstCardRef = useRef<HTMLButtonElement>(null);
-  useEffect(() => {
-    if (result?.status === "interpreted") firstCardRef.current?.focus({ preventScroll: true });
-  }, [result]);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const reopenRef = useRef<HTMLButtonElement>(null);
+  const conclusionRef = useRef<HTMLDivElement>(null);
+  const allViewed = viewed.length === reading.cards.length;
+
   useEffect(() => () => {
     controllerRef.current?.abort();
     controllerRef.current = null;
   }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    dialogRef.current?.querySelector<HTMLElement>(".reading-card, .modal-close")?.focus({ preventScroll: true });
+    return () => { document.body.style.overflow = previousOverflow; };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !exporting) closeDialog();
+      if (event.key !== "Tab" || !dialogRef.current) return;
+      const focusable = Array.from(dialogRef.current.querySelectorAll<HTMLElement>("button:not([disabled])"));
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    };
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [open, exporting]);
+
+  useEffect(() => {
+    if (showConclusion) conclusionRef.current?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+  }, [showConclusion]);
+
+  function closeDialog() {
+    setOpen(false);
+    window.setTimeout(() => reopenRef.current?.focus({ preventScroll: true }));
+  }
 
   async function interpret() {
     if (result || exporting || controllerRef.current) return;
@@ -394,6 +467,7 @@ function Interpretation({ reading, onComplete, exporting }: {
       }
       if (controllerRef.current === controller) {
         setResult(parsed);
+        setOpen(true);
         if (parsed.status === "support") onComplete(true);
       }
     } catch (caught) {
@@ -412,45 +486,20 @@ function Interpretation({ reading, onComplete, exporting }: {
     }
   }
 
-  function revealCard(index: number) {
-    if (!result || pending || exporting || index > revealedCount) return;
+  function viewCard(index: number) {
+    if (exporting) return;
     setActiveIndex(index);
-    setRevealedCount((count) => Math.max(count, index + 1));
+    setViewed((current) => current.includes(index) ? current : [...current, index]);
   }
 
-  if (result?.status === "support") return <section className="interpretation" aria-live="polite">
-    <div className="message-banner"><p>{result.overview}</p></div>
-    <p>{result.safetyNote}</p>
-    <p>{result.synthesis}</p>
-    <ul className="reading-advice">{result.advice.map((advice) => <li key={advice}>{advice}</li>)}</ul>
-    <p className="reading-reflection">{result.reflectionQuestion}</p>
-  </section>;
+  function conclude() {
+    setShowConclusion(true);
+    onComplete(true);
+  }
 
-  return <section className={`interpretation reading-journey ${result ? "is-started" : ""}`} aria-label="Giải nghĩa trải bài">
-    {result && <p className="journey-progress" aria-live="polite">Bước {activeIndex + 1}/{reading.cards.length} · {reading.cards[activeIndex].position}</p>}
-    {result && <ol className={`journey-cards count-${reading.cards.length}`} aria-label="Các lá bài theo thứ tự">
-      {reading.cards.map((item, index) => {
-        const revealed = index < revealedCount;
-        const available = Boolean(result) && index <= revealedCount;
-        return <li className={`drawn-card ${result && index === activeIndex ? "current" : ""}`} key={item.card.id}>
-          <span className="position-label">{item.position}</span>
-          <button ref={index === 0 ? firstCardRef : undefined} id={`journey-card-${index}`}
-            className={`tarot-card ${revealed ? "flipped" : ""} ${item.isReversed ? "reversed" : ""}`}
-            disabled={!available || exporting}
-            aria-label={revealed ? `Xem lại lá ${index + 1}: ${item.card.name}` : `Lật lá ${index + 1}: ${item.position}`}
-            aria-current={result && index === activeIndex ? "step" : undefined}
-            onClick={() => revealCard(index)}>
-            <span className="card-flip-inner" aria-hidden="true">
-              <span className="card-side card-side-back"><CardBack /></span>
-              <span className="card-side card-side-front"><CardArt card={item.card} /></span>
-            </span>
-          </button>
-          <span className={`orientation ${item.isReversed && revealed ? "is-reversed" : ""}`}>
-            {revealed ? item.isReversed ? "↓ Ngược" : "↑ Xuôi" : `${index + 1}/${reading.cards.length}`}
-          </span>
-        </li>;
-      })}
-    </ol>}
+  const isSupport = result?.status === "support";
+
+  return <section className="interpretation" aria-label="Giải nghĩa trải bài">
     {!result && <div className="interpret-controls" data-html2canvas-ignore>
       <button className="button button-gold" onClick={interpret} disabled={pending || exporting}>
         {pending ? "Đang giải nghĩa…" : interpretationError ? "Thử lại giải nghĩa" : "Bắt đầu giải nghĩa"}
@@ -458,34 +507,62 @@ function Interpretation({ reading, onComplete, exporting }: {
       {pending && <p className="reading-note" role="status">Đang kết nối thông điệp của các lá bài…</p>}
       {interpretationError && <p className="interpret-error" role="alert">{interpretationError}</p>}
     </div>}
-    {result && <>
-      {revealedCount === 0 && <p className="reading-note">Chạm lá bài đầu tiên để mở thông điệp.</p>}
-      {result.cards.slice(0, revealedCount).map((meaning, index) => <article
-        className="card-reading" key={meaning.cardId} data-card-reading hidden={index !== activeIndex}
-        aria-labelledby={`journey-card-${index}`}>
-        <p className="eyebrow">{reading.cards[index].position} · {reading.cards[index].isReversed ? "NGƯỢC" : "XUÔI"}</p>
-        <h3>{reading.cards[index].card.name}</h3>
-        <strong className="reading-headline">{meaning.headline}</strong>
-        <p className="reading-meaning">{meaning.interpretation}</p>
-      </article>)}
-      {revealedCount > 0 && revealedCount < reading.cards.length && <p className="reading-note">
-        Chạm lá bài tiếp theo để tiếp tục.
-      </p>}
-      {revealedCount === reading.cards.length && !showConclusion && <div className="flow-actions center" data-html2canvas-ignore>
-        <button className="button button-gold" onClick={() => { setShowConclusion(true); onComplete(true); }}>Kết luận</button>
-      </div>}
-    </>}
-    {showConclusion && result && <div className="reading-conclusion" aria-live="polite">
-      <h3>Kết luận</h3>
-      <div className="message-banner">
-        <span className="message-icon" aria-hidden="true">✦</span><p>{result.overview}</p>
-      </div>
-      <p>{result.synthesis}</p>
-      <h4>Điều bạn có thể làm</h4>
-      <ul className="reading-advice">{result.advice.map((advice) => <li key={advice}>{advice}</li>)}</ul>
-      <p className="reading-reflection">{result.reflectionQuestion}</p>
-      {result.safetyNote && <p className="reading-note">{result.safetyNote}</p>}
+
+    {result && <div className="interpret-controls" data-html2canvas-ignore>
+      <button ref={reopenRef} className="button button-gold" onClick={() => setOpen(true)} disabled={exporting}>✦ Xem giải nghĩa</button>
     </div>}
+
+    {result && <div className="export-reading">
+      {isSupport ? <SupportMessage result={result} /> : <>
+        <ol className={`journey-cards count-${reading.cards.length}`}>
+          {reading.cards.map((item) => <li className="drawn-card" key={item.card.id}>
+            <span className="position-label">{item.position}</span>
+            <span className={`reading-card ${item.isReversed ? "reversed" : ""}`}><CardArt card={item.card} /></span>
+            <span className={`orientation ${item.isReversed ? "is-reversed" : ""}`}>{item.isReversed ? "↓ Ngược" : "↑ Xuôi"}</span>
+          </li>)}
+        </ol>
+        {reading.cards.map((item, index) => <CardMeaning key={item.card.id} reading={reading} result={result} index={index} />)}
+        {showConclusion && <ReadingConclusion result={result} />}
+      </>}
+    </div>}
+
+    {open && result && createPortal(<div className="modal-backdrop reading-backdrop" onClick={() => { if (!exporting) closeDialog(); }}>
+      <div className="reading-dialog" role="dialog" aria-modal="true" aria-labelledby="reading-dialog-title"
+        ref={dialogRef} onClick={(event) => event.stopPropagation()}>
+        <button className="modal-close" onClick={closeDialog} disabled={exporting} aria-label="Đóng giải nghĩa">×</button>
+        <h2 className="reading-dialog-title" id="reading-dialog-title">Thông điệp trải bài</h2>
+        {isSupport ? <SupportMessage result={result} /> : <>
+          <p className="journey-progress" aria-live="polite">Đã xem {viewed.length}/{reading.cards.length} lá</p>
+          <ol className={`journey-cards count-${reading.cards.length}`} aria-label="Các lá bài">
+            {reading.cards.map((item, index) => {
+              const isViewed = viewed.includes(index);
+              return <li className={`drawn-card ${index === activeIndex ? "current" : ""} ${isViewed ? "viewed" : ""}`} key={item.card.id}>
+                <span className="position-label">{item.position}</span>
+                <button className={`reading-card ${item.isReversed ? "reversed" : ""}`} onClick={() => viewCard(index)}
+                  aria-pressed={index === activeIndex} aria-label={`Xem lá ${index + 1}: ${item.card.name}`} disabled={exporting}>
+                  <CardArt card={item.card} />
+                  {isViewed && <span className="viewed-mark" aria-hidden="true">✓</span>}
+                </button>
+                <span className={`orientation ${item.isReversed ? "is-reversed" : ""}`}>{item.isReversed ? "↓ Ngược" : "↑ Xuôi"}</span>
+              </li>;
+            })}
+          </ol>
+          {activeIndex === null
+            ? <p className="reading-note">Chạm từng lá để xem thông điệp.</p>
+            : <CardMeaning reading={reading} result={result} index={activeIndex} />}
+          {activeIndex !== null && !allViewed && <p className="reading-note">
+            Chạm các lá còn lại để xem tiếp · {viewed.length}/{reading.cards.length}
+          </p>}
+          {allViewed && !showConclusion && <div className="flow-actions center">
+            <button className="button button-gold" onClick={conclude}>Kết luận</button>
+          </div>}
+          {showConclusion && <div ref={conclusionRef}><ReadingConclusion result={result} /></div>}
+        </>}
+        {canExport && <div className="flow-actions center">
+          <button className="button button-gold" onClick={onDownload} disabled={exporting}>{exporting ? "Đang tạo ảnh…" : "↓ Tải ảnh kết quả"}</button>
+        </div>}
+      </div>
+    </div>, document.body)}
   </section>;
 }
 

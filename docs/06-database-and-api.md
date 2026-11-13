@@ -11,7 +11,7 @@ Không có Supabase/PostgreSQL, schema, migration, seed database, auth hay REST 
 | Ảnh lá và nền | `public/cards/`, `public/splash/` |
 | Phiên, kết quả và bước đang xem | React state, mất khi refresh |
 | Ảnh xuất | PNG tạo tại thiết bị, tải về theo thao tác người dùng |
-| API key / model | Biến môi trường server trên Vercel |
+| API key / model | Biến môi trường server trên Vercel; local có thể dùng `gemini.local.json` đã bỏ qua bởi Git và chặn tải qua Vite |
 
 ## `POST /api/interpret`
 
@@ -68,7 +68,7 @@ Body: `{ "error": "Thông báo tiếng Việt", "code": "MÃ_LỖI" }`. Không c
 | 415 | `CONTENT_TYPE` |
 | 429 | `RATE_LIMITED`, `PROVIDER_QUOTA`; `Retry-After: 60` |
 | 502 | `PROVIDER_UNAVAILABLE`, `PROVIDER_ERROR`, `INVALID_RESPONSE` |
-| 503 | `NOT_CONFIGURED`, `PROVIDER_AUTH` |
+| 503 | `NOT_CONFIGURED`, `PROVIDER_AUTH`, `PROVIDER_BUSY`; `PROVIDER_BUSY` có `Retry-After: 30` |
 | 504 | `TIMEOUT` |
 | 500 | `INTERNAL_ERROR`; local adapter có thể trả `LOCAL_API_ERROR` |
 

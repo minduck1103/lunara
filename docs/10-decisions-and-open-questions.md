@@ -8,11 +8,11 @@
 | React + TypeScript + Vite | Source hiện tại; CSS thuần và React state |
 | Không database/tài khoản/lịch sử | Mỗi phiên chỉ nằm trong bộ nhớ; người dùng lưu PNG |
 | Rút bài tại browser | Web Crypto, không trùng, 35% ngược; không server draw |
-| Một lá và ba lá | Ba lá: Quá khứ, Hiện tại, Hướng mở; không tương lai cố định |
+| Một lá và ba lá | Ba lá: Quá khứ, Hiện tại, Tương lai; không tương lai cố định |
 | Gemini qua Vercel Function cùng project | Không VPS hoặc backend riêng; key chỉ ở server |
 | Rule là nguồn tri thức luận giải | ID/vị trí/chiều cố định, không suy diễn ảnh thay thế |
 | Một request cho toàn trải bài | Lật và kết luận là mở nội dung đã nhận, không gọi thêm |
-| Khung giải nghĩa trong trang | Không tab trình duyệt mới/modal; mở từng lá theo thứ tự |
+| Hộp thoại giải nghĩa phủ trang | Hiện đủ lá ngay, không flip; xem đủ mọi lá mới có Kết luận; PNG chụp bản ẩn trong trang |
 | Giữ lượt lật ảnh ban đầu | Sau xáo/rút, mở bài như trước; Bắt đầu giải nghĩa chỉ xuất hiện bên dưới khi mở hết |
 | Giữ trải một lá | Một bước rồi Kết luận |
 | Bỏ nhãn kỹ thuật trong UI | Nút Bắt đầu giải nghĩa; thông báo tự động/quyền riêng tư ở footer |

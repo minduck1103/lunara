@@ -87,7 +87,7 @@ Cách đọc: lá duy nhất là trọng tâm. Trả lời trực tiếp câu h�
 |---|---|---|
 | `past` | Quá khứ | Ảnh hưởng, trải nghiệm hoặc nguyên nhân đã dẫn đến tình hình hiện tại. |
 | `present` | Hiện tại | Tình hình, cảm xúc hoặc thử thách đang diễn ra. Đây là lá trọng tâm. |
-| `future` | Hướng mở | Xu hướng có thể xảy ra **nếu giữ nguyên hướng hiện tại**. Không phải kết cục cố định. |
+| `future` | Tương lai | Xu hướng có thể xảy ra **nếu giữ nguyên hướng hiện tại**. Không phải kết cục cố định. |
 
 Cách đọc: kể một mạch liền từ `past` → `present` → `future`. Lá `present` được nhấn mạnh nhất. Lá `future` luôn được trình bày như khả năng có thể thay đổi bằng lựa chọn của người hỏi.
 
@@ -222,7 +222,7 @@ Backend phải từ chối và tạo lại tối đa 1 lần. Nếu vẫn sai, A
 - Vi phạm bảng A2.
 - Vượt giới hạn độ dài ở A8 quá 30%.
 
-Trong triển khai hiện tại, schema, danh tính lá, chiều, vị trí, độ dài và một số cụm từ bị cấm được kiểm tra bằng mã. Các quy tắc ngữ nghĩa như giới hạn tư vấn chuyên môn và không đọc suy nghĩ còn phụ thuộc vào chỉ dẫn hệ thống, bộ lọc của provider và kiểm thử đánh giá; không được coi là bảo đảm an toàn tuyệt đối. Một response chứa toàn bộ nghĩa từng lá và kết luận. UI mở từng lá theo thứ tự rồi nút Kết luận mở phần tổng hợp; các thao tác này không gọi provider thêm. Thông báo xử lý tự động nằm trong Quyền riêng tư ở footer, không đưa thuật ngữ kỹ thuật vào nội dung bói.
+Trong triển khai hiện tại, schema, danh tính lá, chiều, vị trí, độ dài và một số cụm từ bị cấm được kiểm tra bằng mã. Các quy tắc ngữ nghĩa như giới hạn tư vấn chuyên môn và không đọc suy nghĩ còn phụ thuộc vào chỉ dẫn hệ thống, bộ lọc của provider và kiểm thử đánh giá; không được coi là bảo đảm an toàn tuyệt đối. Một response chứa toàn bộ nghĩa từng lá và kết luận. UI hiện đủ các lá trong hộp thoại, người dùng xem từng lá rồi nút Kết luận mở phần tổng hợp; các thao tác này không gọi provider thêm. Thông báo xử lý tự động nằm trong Quyền riêng tư ở footer, không đưa thuật ngữ kỹ thuật vào nội dung bói.
 
 ## A11. Ví dụ luận giải mẫu
 

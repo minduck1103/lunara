@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { setTimeout as delay } from "node:timers/promises";
 import { interpretationSchema, parseInterpretation, readingRequestSchema } from "../src/data/interpretation";
 import { buildSystemInstruction } from "./rules";
 
@@ -98,7 +99,10 @@ export function createInterpretHandler({
       const timer = setTimeout(cancel, timeoutMs);
       try {
         const systemInstruction = buildSystemInstruction(reading);
-        for (let attempt = 0; attempt < 2; attempt++) {
+        let invalidResponses = 0;
+        let busyRetries = 0;
+        for (let attempt = 0; attempt < 3; attempt++) {
+          controller.signal.throwIfAborted();
           let upstream: Response;
           try {
             upstream = await fetcher(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
@@ -109,8 +113,8 @@ export function createInterpretHandler({
                 systemInstruction: { parts: [{ text: systemInstruction }] },
                 contents: [{ role: "user", parts: [{ text: JSON.stringify(reading) }] }],
                 generationConfig: {
-                  temperature: 0.4,
                   maxOutputTokens: 4096,
+                  ...(model === "gemini-3.6-flash" ? { thinkingConfig: { thinkingLevel: "LOW" } } : {}),
                   responseMimeType: "application/json",
                   responseJsonSchema: z.toJSONSchema(interpretationSchema),
                 },
@@ -120,9 +124,19 @@ export function createInterpretHandler({
             if (controller.signal.aborted) throw error;
             throw new ApiError(502, "PROVIDER_UNAVAILABLE", "Không kết nối được dịch vụ giải nghĩa. Vui lòng thử lại sau.");
           }
+          controller.signal.throwIfAborted();
           if (!upstream.ok) {
             // Never log provider bodies, headers, questions or credentials.
-            console.warn("Gemini request rejected", { status: upstream.status });
+            console.warn("Gemini request rejected", { status: upstream.status, attempt: attempt + 1 });
+            if (upstream.status === 503) {
+              await upstream.body?.cancel();
+              if (attempt < 2) {
+                const waitMs = 1000 * 2 ** busyRetries++ + Math.floor(Math.random() * 250);
+                await delay(waitMs, undefined, { signal: controller.signal });
+                continue;
+              }
+              throw new ApiError(503, "PROVIDER_BUSY", "Dịch vụ giải nghĩa đang quá tải hoặc tạm thời không khả dụng. Vui lòng đợi một lát rồi thử lại.");
+            }
             if (upstream.status === 429) throw new ApiError(429, "PROVIDER_QUOTA", "Dịch vụ đang bận hoặc đã đạt hạn mức. Vui lòng thử lại sau.");
             if (upstream.status === 401 || upstream.status === 403) {
               throw new ApiError(503, "PROVIDER_AUTH", "Dịch vụ giải nghĩa chưa sẵn sàng. Vui lòng thử lại sau.");
@@ -135,10 +149,14 @@ export function createInterpretHandler({
             if (candidate?.finishReason !== "STOP") throw new Error("Incomplete or blocked output.");
             const output = candidate.content?.parts.filter((part) => !part.thought).map((part) => part.text ?? "").join("");
             if (!output) throw new Error("Empty provider response.");
-            return json(parseInterpretation(JSON.parse(output), reading));
+            const interpretation = parseInterpretation(JSON.parse(output), reading);
+            controller.signal.throwIfAborted();
+            return json(interpretation);
           } catch (error) {
             if (controller.signal.aborted) throw error;
             console.warn("Gemini response failed validation", { attempt: attempt + 1 });
+            invalidResponses++;
+            if (invalidResponses >= 2) break;
           }
         }
         throw new ApiError(502, "INVALID_RESPONSE", "Kết quả giải nghĩa chưa hợp lệ. Vui lòng thử lại.");
@@ -150,7 +168,8 @@ export function createInterpretHandler({
       if (error instanceof ApiError) {
         console.warn("Interpretation request failed", { code: error.code, status: error.status });
         return json({ error: error.message, code: error.code }, error.status,
-          error.status === 429 ? { "Retry-After": "60" } : {});
+          error.status === 429 ? { "Retry-After": "60" }
+            : error.code === "PROVIDER_BUSY" ? { "Retry-After": "30" } : {});
       }
       if (error instanceof SyntaxError) {
         return json({ error: "JSON không hợp lệ.", code: "INVALID_JSON" }, 400);

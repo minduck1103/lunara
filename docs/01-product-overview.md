@@ -12,7 +12,7 @@
 - Câu hỏi không bắt buộc, tối đa 240 ký tự.
 - Trải một lá hoặc ba lá, rút bằng Web Crypto trong trình duyệt, không trùng lá.
 - Giữ lượt lật bài ban đầu sau xáo/rút (từng lá hoặc Lật tất cả); sau khi mở hết mới hiện **Bắt đầu giải nghĩa** ở dưới. Nhấn nút này gọi Gemini qua `/api/interpret`.
-- Khung giải nghĩa ngay trong trang: bài nằm ngang, lật lần lượt theo thứ tự; mỗi lá mở nội dung riêng.
+- Hộp thoại giải nghĩa phủ lên trang: hiện ngay đủ các lá nằm ngang (không hiệu ứng lật); chạm từng lá để xem nội dung riêng, xem đủ mới có Kết luận.
 - Nút **Kết luận** xuất hiện sau khi đã mở hết bài; chỉ khi nhấn mới hiện thông điệp tổng quan, tổng hợp, lời khuyên và câu hỏi chiêm nghiệm.
 - Trải một lá dùng cùng luồng với một bước.
 - Sau kết luận có thể tải PNG đầy đủ nội dung, không chỉ phần đang nhìn thấy.

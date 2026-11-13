@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
+import { createServer } from "vite";
+import viteConfig from "../vite.config";
 import { createInterpretHandler } from "../server/interpret";
 import { buildSystemInstruction, parseRules } from "../server/rules";
 import { parseInterpretation, readingRequestSchema, rulesVersion, type InterpretationResult, type ReadingRequest } from "../src/data/interpretation";
@@ -31,6 +34,55 @@ function request(body: unknown = reading, headers: HeadersInit = {}) {
 function provider(value: unknown = result) {
   return Response.json({ candidates: [{ finishReason: "STOP", content: { parts: [{ text: JSON.stringify(value) }] } }] });
 }
+
+test("local server reads ignored config, prefers environment and works without the file", async (t) => {
+  const root = mkdtempSync(join(tmpdir(), "lunara-local-config-"));
+  const originalKey = process.env.GEMINI_API_KEY;
+  const clientFetch = globalThis.fetch;
+  let receivedKey: string | null = null;
+  t.after(() => {
+    if (originalKey === undefined) delete process.env.GEMINI_API_KEY;
+    else process.env.GEMINI_API_KEY = originalKey;
+    rmSync(root, { recursive: true, force: true });
+  });
+  t.mock.method(globalThis, "fetch", async (_input: unknown, init?: RequestInit) => {
+    receivedKey = new Headers(init?.headers).get("x-goog-api-key");
+    return provider();
+  });
+  for (const mode of ["missing", "file", "environment"]) {
+    delete process.env.GEMINI_API_KEY;
+    if (mode !== "missing") writeFileSync(join(root, "gemini.local.json"), JSON.stringify({ GEMINI_API_KEY: "local-test-not-real" }));
+    if (mode === "environment") process.env.GEMINI_API_KEY = "environment-test-not-real";
+    receivedKey = null;
+    const server = await createServer({
+      configFile: false, root,
+      plugins: viteConfig.plugins?.filter((plugin) => plugin && typeof plugin === "object"
+        && "name" in plugin && plugin.name === "local-interpret-api"),
+      optimizeDeps: { noDiscovery: true },
+      server: { ...viteConfig.server, host: "127.0.0.1", port: 0, watch: null },
+    });
+    try {
+      await server.listen();
+      const base = server.resolvedUrls?.local[0];
+      assert.ok(base);
+      const response = await clientFetch(new URL("api/interpret", base), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(reading),
+      });
+      assert.equal(response.status, mode === "missing" ? 503 : 200);
+      assert.equal(receivedKey, mode === "missing" ? null
+        : mode === "file" ? "local-test-not-real" : "environment-test-not-real");
+      if (mode !== "missing") {
+        const configResponse = await clientFetch(new URL("gemini.local.json", base));
+        assert.equal(configResponse.status, 403);
+        assert.doesNotMatch(await configResponse.text(), /local-test-not-real/);
+      }
+    } finally {
+      await server.close();
+    }
+  }
+});
 
 test("canonical rule document covers the deck and only selected knowledge enters the prompt", () => {
   const source = readFileSync(join("docs", "11-rule-tarot"), "utf8");
@@ -83,6 +135,8 @@ test("handler sends canonical context to Gemini and returns validated JSON witho
     assert.deepEqual(JSON.parse(body.contents[0].parts[0].text), reading);
     assert.ok(body.generationConfig.responseJsonSchema);
     assert.equal(body.generationConfig.maxOutputTokens, 4096);
+    assert.equal("temperature" in body.generationConfig, false);
+    assert.deepEqual(body.generationConfig.thinkingConfig, { thinkingLevel: "LOW" });
     assert.match(body.systemInstruction.parts[0].text, /### `the-star`/);
     return provider();
   };
@@ -106,6 +160,18 @@ test("method, origin, oversized and invalid requests never call the provider", a
   });
   assert.equal((await handler(broken)).status, 400);
   assert.equal(calls, 0);
+});
+
+test("custom models do not receive model-specific thinking settings", async () => {
+  const handler = createInterpretHandler({
+    env: { ...env, GEMINI_MODEL: "gemini-3.5-flash-lite" },
+    fetcher: async (input, init) => {
+      assert.match(String(input), /models\/gemini-3\.5-flash-lite:generateContent$/u);
+      assert.equal("thinkingConfig" in JSON.parse(String(init?.body)).generationConfig, false);
+      return provider();
+    },
+  });
+  assert.equal((await handler(request())).status, 200);
 });
 
 test("missing configuration returns an explicit 503 rather than simulated AI", async () => {
@@ -144,6 +210,81 @@ test("provider quota errors are not retried and provider bodies cannot leak", as
   assert.equal(response.headers.get("retry-after"), "60");
   assert.doesNotMatch(await response.text(), /private-provider-details|test-key-not-real/);
   assert.equal(calls, 1);
+});
+
+test("temporary provider overload retries the same draw and recovers", async () => {
+  const bodies: string[] = [];
+  const handler = createInterpretHandler({ env, fetcher: async (_input, init) => {
+    bodies.push(String(init?.body));
+    return bodies.length < 3 ? Response.json({ error: "private-provider-details" }, { status: 503 }) : provider();
+  } });
+  const response = await handler(request());
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), result);
+  assert.equal(bodies.length, 3);
+  assert.equal(new Set(bodies).size, 1);
+});
+
+test("persistent provider overload returns explicit 503 after at most three calls", async () => {
+  let calls = 0;
+  const response = await createInterpretHandler({ env, fetcher: async () => {
+    calls++;
+    return Response.json({ error: "private-provider-details" }, { status: 503 });
+  } })(request());
+  assert.equal(response.status, 503);
+  assert.equal(response.headers.get("retry-after"), "30");
+  assert.equal(response.headers.get("cache-control"), "no-store");
+  const payload = await response.json();
+  assert.equal(payload.code, "PROVIDER_BUSY");
+  assert.doesNotMatch(JSON.stringify(payload), /private-provider-details|test-key-not-real/);
+  assert.equal(calls, 3);
+});
+
+test("overload retries and invalid output share a three-call budget", async () => {
+  let calls = 0;
+  const response = await createInterpretHandler({ env, fetcher: async () => {
+    calls++;
+    return calls === 1 ? new Response(null, { status: 503 }) : provider({ ...result, cards: [] });
+  } })(request());
+  assert.equal(response.status, 502);
+  assert.equal((await response.json()).code, "INVALID_RESPONSE");
+  assert.equal(calls, 3);
+});
+
+test("deadline interrupts overload backoff without another provider call", async () => {
+  let calls = 0;
+  const response = await createInterpretHandler({ env, timeoutMs: 10, fetcher: async () => {
+    calls++;
+    return new Response(null, { status: 503 });
+  } })(request());
+  assert.equal(response.status, 504);
+  assert.equal((await response.json()).code, "TIMEOUT");
+  assert.equal(calls, 1);
+});
+
+test("client cancellation interrupts overload backoff", async () => {
+  const controller = new AbortController();
+  let calls = 0;
+  const handler = createInterpretHandler({ env, fetcher: async () => {
+    calls++;
+    setTimeout(() => controller.abort(), 10);
+    return new Response(null, { status: 503 });
+  } });
+  const response = await handler(new Request(request(), { signal: controller.signal }));
+  assert.equal(response.status, 504);
+  assert.equal(calls, 1);
+});
+
+test("invalid requests and authentication failures are not retried", async () => {
+  for (const status of [400, 401, 403, 404]) {
+    let calls = 0;
+    const response = await createInterpretHandler({ env, fetcher: async () => {
+      calls++;
+      return new Response(null, { status });
+    } })(request());
+    assert.equal(response.status, status === 401 || status === 403 ? 503 : 502);
+    assert.equal(calls, 1);
+  }
 });
 
 test("provider network failure is explicit", async () => {

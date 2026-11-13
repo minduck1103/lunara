@@ -28,22 +28,23 @@ Chọn Một lá hoặc Ba lá, nhấn **Xáo & rút bài**. Xáo tối thiểu 
 
 1. Sau xáo bài: hiện các lá úp như trước. Chạm để lật từng lá hoặc chọn **Lật tất cả**; các lá đã mở tiếp tục hiện ảnh, chiều và mở được popup chi tiết. Chưa gọi API, chưa có diễn giải.
 2. Khi mở hết bài mới có **Bắt đầu giải nghĩa** ở bên dưới. Nhấn nút gọi `/api/interpret`; nút chuyển **Đang giải nghĩa…**, chặn gửi trùng. Không checkbox hoặc nhãn kỹ thuật.
-3. Khi có kết quả hợp lệ, khung ngay trong trang hiển thị bước `1/n`; chỉ lá đầu tiên được mở.
-4. Chạm lá đầu: flip ngửa, hiện tên, chiều, headline và nội dung riêng. Lá tiếp theo được mở khóa.
-5. Tương tự với lá hai và ba. Chỉ phần nghĩa của lá đang chọn hiện trên màn hình; có thể chọn lá đã mở để xem lại, không gọi API.
-6. Sau lá cuối mới có nút **Kết luận**. Nhấn nút để hiện overview, synthesis, advice, reflectionQuestion và safetyNote nếu có.
-7. Sau kết luận hiện **Tải ảnh kết quả**. Trải một lá chỉ có một bước rồi Kết luận.
+3. Khi có kết quả hợp lệ, một **hộp thoại phủ lên trang** (`role="dialog"`, `aria-modal`) mở ra. Hộp thoại hiện ngay tất cả 1/3 lá ở mặt ngửa trên một hàng ngang, kèm vị trí và chiều; **không có hiệu ứng lật**.
+4. Chạm một lá bất kỳ để xem tên, chiều, headline và nội dung riêng. Lá đã xem có dấu ✓; lá đang chọn được viền vàng. Bộ đếm hiện `Đã xem x/n lá`. Chọn lại lá đã xem không gọi API.
+5. Chỉ khi đã xem **đủ nội dung của mọi lá** mới hiện nút **Kết luận**. Nhấn nút để hiện overview, synthesis, advice, reflectionQuestion và safetyNote nếu có.
+6. Sau kết luận hiện **Tải ảnh kết quả** trong hộp thoại và dưới trang. Trải một lá cũng phải chạm xem lá đó trước khi Kết luận.
+7. Đóng bằng nút ×, Escape hoặc chạm nền; kết quả được giữ, nút **Xem giải nghĩa** mở lại hộp thoại. Không đóng được khi đang xuất ảnh. Focus được giữ trong hộp thoại, body không cuộn nền.
+8. Lỗi/đang chờ/thử lại hiện dưới hàng bài ban đầu, không mở hộp thoại. Phản hồi `support` mở hộp thoại với nội dung hỗ trợ ngay, cho tải ảnh.
 
-**Lật tất cả** chỉ dành cho hàng ảnh ban đầu; khung giải nghĩa sau đó phải đi theo từng bước. Không có phần nghĩa tham khảo xen giữa. Từ khóa trong danh mục vẫn dùng độc lập.
+**Lật tất cả** chỉ dành cho hàng ảnh ban đầu. Không có phần nghĩa tham khảo xen giữa. Từ khóa trong danh mục vẫn dùng độc lập.
 
 ## PNG
 
-Chụp toàn bộ `#reading-result`, không bao gồm hero/danh mục/footer. Bản xuất:
+Chụp toàn bộ `#reading-result`, không bao gồm hộp thoại, hero/danh mục/footer. Bản xuất:
 
 - Có thương hiệu, chủ đề, câu hỏi, ảnh/chiều lá, **tất cả** phần nghĩa riêng và kết luận.
-- Không chụp hàng ảnh ban đầu để tránh lặp lại bộ bài đã có trong khung giải nghĩa.
-- Mở các article đang `hidden` trong bản clone, không thay đổi lá đang chọn trên màn hình.
-- Tắt animation và 3D flip trong clone, không đảo ngược chữ tên bài.
+- Nội dung lấy từ khối `.export-reading` ẩn trong trang (chỉ hiện trong bản clone `.export-capture`), nên không phụ thuộc lá đang chọn trong hộp thoại.
+- Không chụp hàng ảnh ban đầu để tránh lặp lại bộ bài.
+- Tắt animation trong clone, không đảo ngược chữ tên bài.
 - Không có nút thao tác; có disclaimer.
 - Báo lỗi khi ảnh hoặc PNG không tạo được; cho thử lại.
 - Khóa thao tác thay đổi nội dung trong lúc xuất.

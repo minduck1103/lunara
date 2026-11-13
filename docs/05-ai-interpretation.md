@@ -19,7 +19,7 @@ Một `POST /api/interpret` gọi Gemini qua Vercel Function trong cùng project
 5. Tạo system instruction từ Phần A trước A9, khung tri thức và mục riêng của các lá đã rút. JSON Schema trong mã là hợp đồng đầu ra chính.
 6. Gọi REST `generateContent` bằng `GEMINI_API_KEY` server; model từ `GEMINI_MODEL` hoặc mặc định `gemini-3.6-flash`.
 7. Parse response `finishReason=STOP`, bỏ phần thought, kiểm tra JSON và nội dung.
-8. Chỉ khi output không hợp lệ mới tạo lại tối đa một lần; không retry lỗi mạng, xác thực, quota hoặc HTTP provider.
+8. Output không hợp lệ được tạo lại tối đa một lần. HTTP 503 được thử lại với exponential backoff 1 giây, 2 giây và jitter dưới 250 ms; tổng tối đa 3 lần gọi provider, bao gồm cả tạo lại output. Không retry lỗi mạng, xác thực, quota hoặc HTTP khác; không tự chuyển model.
 9. Trả JSON `no-store`; client kiểm tra lại rồi mở luồng từng lá. Không lưu kết quả.
 
 Một response chứa cả nghĩa từng lá, overview, synthesis, advice, reflectionQuestion và safetyNote. Nhấn từng lá hay **Kết luận** không gọi Gemini thêm.
@@ -38,10 +38,12 @@ Kiểm tra bằng mã bao gồm schema, danh tính lá, giới hạn từ và m�
 ## Ngân sách và lỗi
 
 - JSON request tối đa 4 KB; câu hỏi tối đa 240 ký tự.
-- Output tối đa 4.096 token mỗi lần gọi, temperature 0,4.
-- Server deadline 45 giây dùng chung cho cả hai lần tạo; client 52 giây; Vercel Function 60 giây.
+- Output tối đa 4.096 token mỗi lần gọi; dùng tham số sampling mặc định, không gửi temperature tùy chỉnh (Gemini 3.6+ không hỗ trợ tùy chỉnh này).
+- Riêng `gemini-3.6-flash` đặt `thinkingConfig.thinkingLevel=LOW` để giảm độ trễ trong deadline; không áp dụng tham số đặc thù này cho model tùy chỉnh khác.
+- Server deadline 45 giây dùng chung cho mọi lần gọi và backoff; hủy request hoặc hết hạn sẽ ngắt cả khoảng chờ retry. Client 52 giây; Vercel Function 60 giây.
 - Giới hạn trong bộ nhớ: 3 request/phút/IP, 20 request/phút/instance; không thay thế Vercel Firewall.
 - Lỗi trả `{ error, code }`, giao diện có **Thử lại giải nghĩa**; không tự chèn nghĩa tham khảo vào luồng.
-- Không ghi log key, câu hỏi, response hoặc prompt; chỉ ghi mã lỗi/status.
+- Gemini vẫn trả 503 sau retry: API trả HTTP 503, `PROVIDER_BUSY`, `Retry-After: 30` và thông báo dịch vụ quá tải/tạm thời không khả dụng, thay vì HTTP 502 chung.
+- Không ghi log key, câu hỏi, response hoặc prompt; chỉ ghi mã lỗi/status và số thứ tự lần gọi.
 
 Tên nút và trạng thái trên UI không nhắc thuật ngữ kỹ thuật. Thông báo xử lý tự động/Google Gemini nằm ở **Quyền riêng tư** trong footer. Cấu hình key mới và kiểm thử gọi thật sau deploy xem [README](../README.md#deploy-vercel-và-cấu-hình-gemini).

@@ -35,7 +35,7 @@ flowchart LR
 - Web Crypto quyết định lá và chiều; Gemini chỉ diễn giải, không rút lại.
 - Client giữ reading và lượt lật ban đầu trong bộ nhớ; Function không lưu phiên hoặc kết quả.
 - Key không đi vào bundle, ảnh không gửi tới Gemini.
-- Sau xáo/rút, người dùng lật ảnh như trước. Sau khi mở hết, nút Bắt đầu giải nghĩa ở dưới mới gửi câu hỏi. Một response chứa cả 1/3 lá và kết luận; trong khung mới, lật từng lá và nút kết luận chỉ mở nội dung đã nhận, không gọi lại provider.
+- Sau xáo/rút, người dùng lật ảnh như trước. Sau khi mở hết, nút Bắt đầu giải nghĩa ở dưới mới gửi câu hỏi. Một response chứa cả 1/3 lá và kết luận; hộp thoại hiện đủ các lá, chạm xem từng lá và nút kết luận chỉ mở nội dung đã nhận, không gọi lại provider.
 - Trải bài mới hủy request phía client và bỏ qua phản hồi cũ. Giới hạn thời gian vẫn bảo vệ server nếu provider đang xử lý.
 - PNG chỉ được mở sau kết luận (hoặc nội dung hỗ trợ an toàn); bản clone xuất tất cả phần nghĩa từng lá dù màn hình chỉ chọn một lá. Hàng ảnh ban đầu được bỏ khỏi PNG để không lặp bộ bài.
 

@@ -1,12 +1,42 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import { existsSync, readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import { z } from "zod";
 import { createInterpretHandler } from "./server/interpret";
 
 export default defineConfig({
+  server: {
+    fs: {
+      deny: [".env", ".env.*", "*.{crt,pem}", "**/.git/**", "**/gemini.local.json"],
+    },
+  },
   plugins: [react(), {
     name: "local-interpret-api",
     configureServer(server) {
-      const interpret = createInterpretHandler();
+      const localConfigPath = resolve(server.config.root, "gemini.local.json");
+      let localConfig: { GEMINI_API_KEY?: string; GEMINI_MODEL?: string } = {};
+      if (existsSync(localConfigPath)) {
+        let value: unknown;
+        try {
+          value = JSON.parse(readFileSync(localConfigPath, "utf8"));
+        } catch (error) {
+          if (error instanceof SyntaxError) throw new Error("gemini.local.json: JSON khong hop le. Kiem tra dau ngoac kep va dau phay.");
+          throw error;
+        }
+        const parsed = z.object({
+          GEMINI_API_KEY: z.string().trim(),
+          GEMINI_MODEL: z.string().trim().optional(),
+        }).strict().safeParse(value);
+        if (!parsed.success) throw new Error("gemini.local.json: GEMINI_API_KEY va GEMINI_MODEL phai la chuoi, khong them truong khac.");
+        localConfig = parsed.data;
+      }
+      const interpret = createInterpretHandler({
+        env: {
+          GEMINI_API_KEY: process.env.GEMINI_API_KEY?.trim() || localConfig.GEMINI_API_KEY,
+          GEMINI_MODEL: process.env.GEMINI_MODEL?.trim() || localConfig.GEMINI_MODEL,
+        },
+      });
       server.middlewares.use("/api/interpret", async (incoming, outgoing) => {
         try {
           const chunks: Buffer[] = [];

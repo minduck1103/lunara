@@ -47,15 +47,19 @@ afterEach(async () => {
   globalThis.fetch = originalFetch;
 });
 
+function dialog() {
+  return document.body.querySelector<HTMLElement>('[role="dialog"]');
+}
+
 function button(name: string) {
-  const found = Array.from(container.querySelectorAll("button")).find((item) =>
+  const found = Array.from(document.body.querySelectorAll("button")).find((item) =>
     (item.getAttribute("aria-label") ?? item.textContent ?? "").includes(name));
   assert.ok(found, `Missing button: ${name}`);
   return found;
 }
 
 function hasButton(name: string) {
-  return Array.from(container.querySelectorAll("button")).some((item) => item.textContent?.includes(name));
+  return Array.from(document.body.querySelectorAll("button")).some((item) => item.textContent?.includes(name));
 }
 
 async function click(name: string) {
@@ -73,57 +77,67 @@ async function draw(count: 1 | 3, reveal = true) {
   if (reveal) await click("Lật tất cả");
 }
 
-test("three cards unlock in order, conclusion is explicit, revisiting does not request again", async () => {
+function visibleReading() {
+  return dialog()?.querySelector("[data-card-reading]")?.textContent ?? "";
+}
+
+test("dialog shows all cards face-up and requires viewing each before the conclusion", async () => {
   await draw(3, false);
-  assert.equal(requests.length, 0);
   assert.equal(hasButton("Bắt đầu giải nghĩa"), false);
   await click("Lật lá bài Quá khứ");
   assert.equal(container.querySelectorAll(".drawn-cards .tarot-card.flipped").length, 1);
   assert.equal(hasButton("Bắt đầu giải nghĩa"), false);
   await click("Lật tất cả");
-  assert.equal(container.querySelectorAll(".drawn-cards .tarot-card.flipped").length, 3);
   assert.equal(container.querySelectorAll('input[type="checkbox"]').length, 0);
   assert.doesNotMatch(container.textContent ?? "", /\bAI\b|Nghĩa tham khảo có sẵn|Tôi đồng ý/);
-  assert.equal(button("Bắt đầu giải nghĩa").disabled, false);
-  assert.equal(container.querySelector(".journey-cards"), null);
-  assert.equal(hasButton("Kết luận"), false);
+  assert.equal(dialog(), null);
   assert.equal(hasButton("Tải ảnh"), false);
   await click("Bắt đầu giải nghĩa");
   assert.equal(requests.length, 1);
   assert.equal(requests[0].cards.length, 3);
-  assert.equal(button("Lật lá 1").disabled, false);
-  assert.equal(button("Lật lá 2").disabled, true);
-  assert.equal(container.querySelectorAll("[data-card-reading]").length, 0);
-  await click("Lật lá 1");
-  assert.match(container.querySelector("[data-card-reading]:not([hidden])")?.textContent ?? "", /Nội dung riêng lá 1/);
-  assert.equal(button("Lật lá 2").disabled, false);
-  assert.equal(button("Lật lá 3").disabled, true);
-  await click("Lật lá 2");
-  assert.equal(container.querySelectorAll("[data-card-reading]:not([hidden])").length, 1);
-  await click("Lật lá 3");
-  assert.equal(container.querySelectorAll(".journey-cards .tarot-card.flipped").length, 3);
-  assert.equal(container.querySelector(".reading-conclusion"), null);
-  assert.equal(hasButton("Kết luận"), true);
+  const modal = dialog();
+  assert.ok(modal);
+  assert.equal(modal.getAttribute("aria-modal"), "true");
+  assert.equal(modal.querySelectorAll(".reading-card img").length, 3);
+  assert.equal(modal.querySelectorAll(".tarot-card, .card-flip-inner, .card-side-back").length, 0);
+  assert.equal(visibleReading(), "");
+  await click("Xem lá 3");
+  assert.match(visibleReading(), /Nội dung riêng lá 3/);
+  assert.equal(hasButton("Kết luận"), false);
+  await click("Xem lá 1");
+  assert.match(visibleReading(), /Nội dung riêng lá 1/);
+  assert.equal(modal.querySelectorAll("[data-card-reading]").length, 1);
+  assert.equal(hasButton("Kết luận"), false);
+  await click("Xem lá 2");
+  assert.equal(modal.querySelector(".reading-conclusion"), null);
   await click("Kết luận");
-  assert.match(container.querySelector(".reading-conclusion")?.textContent ?? "", /Kết nối của các lá/);
+  assert.match(modal.querySelector(".reading-conclusion")?.textContent ?? "", /Kết nối của các lá/);
   assert.equal(hasButton("Tải ảnh"), true);
-  await click("Xem lại lá 1");
-  assert.match(container.querySelector("[data-card-reading]:not([hidden])")?.textContent ?? "", /Nội dung riêng lá 1/);
-  assert.equal(container.querySelectorAll("[data-card-reading]").length, 3);
+  const exportBlock = container.querySelector(".export-reading");
+  assert.equal(exportBlock?.querySelectorAll("[data-card-reading]").length, 3);
+  assert.match(exportBlock?.textContent ?? "", /Kết nối của các lá/);
+  await click("Đóng giải nghĩa");
+  assert.equal(dialog(), null);
+  await click("Xem giải nghĩa");
+  assert.ok(dialog()?.querySelector(".reading-conclusion"));
+  await act(async () => { window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" })); });
+  assert.equal(dialog(), null);
   assert.equal(requests.length, 1);
 });
 
-test("one-card spread also requires its flip and conclusion", async () => {
+test("one-card spread requires viewing its card before the conclusion", async () => {
   await draw(1);
   await click("Bắt đầu giải nghĩa");
   assert.equal(requests[0].cards[0].positionId, "message");
-  assert.equal(container.querySelectorAll(".journey-cards li").length, 1);
+  assert.equal(dialog()?.querySelectorAll(".journey-cards li").length, 1);
   assert.equal(hasButton("Kết luận"), false);
-  await click("Lật lá 1");
+  await click("Xem lá 1");
   await click("Kết luận");
   assert.equal(hasButton("Tải ảnh"), true);
+  await click("Đóng giải nghĩa");
   await click("Trải bài mới");
-  assert.equal(container.querySelector(".reading-conclusion"), null);
+  assert.equal(dialog(), null);
+  assert.equal(document.body.querySelector(".reading-conclusion"), null);
   assert.equal(hasButton("Tải ảnh"), false);
 });
 
@@ -135,12 +149,13 @@ test("failed requests show neutral errors and retry without fabricated meanings"
   }, { status: 429 });
   await click("Bắt đầu giải nghĩa");
   assert.match(container.querySelector('[role="alert"]')?.textContent ?? "", /Dịch vụ đang bận/);
-  assert.equal(container.querySelectorAll("[data-card-reading]").length, 0);
-  assert.equal(hasButton("Kết luận"), false);
+  assert.equal(dialog(), null);
+  assert.equal(document.body.querySelectorAll("[data-card-reading]").length, 0);
   assert.doesNotMatch(container.textContent ?? "", /\bAI\b/);
   globalThis.fetch = successFetch;
   await click("Thử lại giải nghĩa");
-  assert.equal(button("Lật lá 1").disabled, false);
+  assert.ok(dialog());
+  assert.equal(button("Xem lá 1").disabled, false);
 });
 
 test("starting over aborts pending requests and discards late results", async () => {
@@ -161,11 +176,11 @@ test("starting over aborts pending requests and discards late results", async ()
   const completed = Response.json(response(captured));
   const finish = resolveResponse;
   await act(async () => { finish(completed); });
-  assert.equal(container.querySelector(".reading-journey"), null);
-  assert.equal(container.querySelector(".reading-conclusion"), null);
+  assert.equal(dialog(), null);
+  assert.equal(document.body.querySelector(".reading-conclusion"), null);
 });
 
-test("support responses bypass card interpretation and can be saved immediately", async () => {
+test("support responses open directly in the dialog and can be saved immediately", async () => {
   await draw(3);
   globalThis.fetch = async (_input, init) => {
     const request = readingRequestSchema.parse(JSON.parse(String(init?.body)));
@@ -176,8 +191,8 @@ test("support responses bypass card interpretation and can be saved immediately"
     });
   };
   await click("Bắt đầu giải nghĩa");
-  assert.match(container.textContent ?? "", /Sự an toàn của bạn/);
-  assert.equal(container.querySelector(".journey-cards"), null);
+  assert.match(dialog()?.textContent ?? "", /Sự an toàn của bạn/);
+  assert.equal(dialog()?.querySelector(".journey-cards"), null);
   assert.equal(hasButton("Kết luận"), false);
   assert.equal(hasButton("Tải ảnh"), true);
 });

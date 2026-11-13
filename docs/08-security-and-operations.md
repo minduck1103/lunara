@@ -3,6 +3,7 @@
 ## Secrets
 
 - Key Gemini chỉ đọc ở Vercel Function từ `GEMINI_API_KEY`.
+- Khi chạy local, middleware có thể đọc `gemini.local.json` trong thư mục gốc; biến môi trường được ưu tiên. File nằm trong `.gitignore`, bị chặn tải bởi Vite và không được đóng gói vào frontend. Sau khi sửa file cần khởi động lại server.
 - Không dùng `VITE_*` cho key; không đặt key trong source, chat, screenshot hoặc log.
 - Key từng bị chia sẻ phải thu hồi, tạo mới và tự cấu hình trong Vercel → Settings → Environment Variables.
 - `GEMINI_MODEL` tùy chọn, mặc định `gemini-3.6-flash`; phải chọn model có quyền truy cập và phù hợp hạn mức tài khoản.
@@ -17,8 +18,9 @@
 - Câu hỏi được đưa vào user data; rule ở system instruction.
 - JSON output được kiểm tra lại cả server và client, gồm fidelity và một số cụm từ bị cấm.
 - 45 giây/server, 52 giây/client, 60 giây/Function; output 4.096 token mỗi lần tạo.
-- Không tự retry HTTP quota/auth/network; tối đa một lần tạo lại output không hợp lệ.
-- `Cache-Control: no-store`; không ghi log key, câu hỏi, nội dung, prompt hoặc provider error body.
+- Không tự retry HTTP quota/auth/network; tối đa một lần tạo lại output không hợp lệ. Riêng HTTP 503 được backoff 1 giây, 2 giây cộng jitter dưới 250 ms; ngân sách chung tối đa 3 lần gọi provider, không tăng deadline 45 giây hoặc tự chuyển model. Retry có thể tăng usage; theo dõi quota/chi phí provider.
+- Hết retry 503 trả `PROVIDER_BUSY`/HTTP 503 và `Retry-After: 30`; không giả lập thành công hoặc trả lỗi 502 chung.
+- `Cache-Control: no-store`; không ghi log key, câu hỏi, nội dung, prompt hoặc provider error body. Log có mã lỗi, status và số thứ tự lần gọi.
 
 ## Hạn chế cần hiểu rõ
 

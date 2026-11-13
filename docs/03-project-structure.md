@@ -48,7 +48,7 @@ tarot-platform-docs/
 1. Người dùng chọn chủ đề, nhập câu hỏi và chọn trải bài.
 2. `drawCards` chọn lá bằng Web Crypto, không lặp trong cùng phiên.
 3. React state giữ kết quả và trạng thái lật bài.
-4. Sau xáo bài, hiện bài úp. Người dùng lật từng lá hoặc Lật tất cả như trước; mở hết mới hiện nút Bắt đầu giải nghĩa bên dưới. Nhấn nút mới gửi câu hỏi/ID/vị trí/chiều đến `/api/interpret`.
+4. Sau xáo bài, hiện bài úp. Người dùng lật từng lá hoặc Lật tất cả như trước; mở hết mới hiện nút Bắt đầu giải nghĩa bên dưới. Nhấn nút mới gửi câu hỏi/ID/vị trí/chiều đến `/api/interpret`; kết quả mở trong hộp thoại (portal vào `document.body`) và một bản ẩn `.export-reading` trong `#reading-result` dùng cho PNG.
 5. Function đọc nghĩa từ `docs/11-rule-tarot`, không gửi ảnh, gọi Gemini bằng key server và xác thực kết quả. Lỗi được hiển thị rõ, không giả làm thành công.
 6. Client giữ một response chung; mở lần lượt các lá, nội dung riêng từng lá, rồi nút Kết luận mở phần tổng hợp. Trải một lá dùng một bước.
 7. Sau kết luận, html2canvas tạo PNG toàn bộ phần kết quả tại thiết bị, bao gồm các phần nghĩa tạm ẩn trên màn hình; không chụp lặp lại hàng ảnh ban đầu.
