@@ -1,8 +1,11 @@
 import assert from "node:assert/strict";
 import { webcrypto } from "node:crypto";
-import { afterEach, beforeEach, test } from "vitest";
+import { afterEach, beforeEach, test, vi } from "vitest";
 import { act } from "react";
 import { readingRequestSchema, rulesVersion, type ReadingRequest } from "../src/data/interpretation";
+
+const { capture } = vi.hoisted(() => ({ capture: vi.fn() }));
+vi.mock("html2canvas", () => ({ default: capture }));
 
 Object.defineProperty(globalThis, "IS_REACT_ACT_ENVIRONMENT", { value: true, configurable: true });
 Object.defineProperty(globalThis, "crypto", { value: webcrypto, configurable: true });
@@ -45,6 +48,8 @@ afterEach(async () => {
   await act(async () => { root.unmount(); });
   container.remove();
   globalThis.fetch = originalFetch;
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 function dialog() {
@@ -195,4 +200,73 @@ test("support responses open directly in the dialog and can be saved immediately
   assert.equal(dialog()?.querySelector(".journey-cards"), null);
   assert.equal(hasButton("Kết luận"), false);
   assert.equal(hasButton("Tải ảnh"), true);
+});
+
+test("each successful download opens the optional donation dialog without losing the reading", async () => {
+  const NativeImage = Image;
+  vi.spyOn(window, "Image").mockImplementation(function () {
+    const image = new NativeImage();
+    Object.defineProperty(image, "src", {
+      set() { queueMicrotask(() => image.dispatchEvent(new Event("load"))); },
+    });
+    return image;
+  });
+  Object.defineProperty(document, "fonts", { configurable: true, value: { ready: Promise.resolve() } });
+  vi.stubGlobal("URL", class extends URL {
+    static createObjectURL = vi.fn(() => "blob:reading");
+    static revokeObjectURL = vi.fn();
+  });
+  const download = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+  capture.mockResolvedValue({
+    toBlob: (callback: BlobCallback) => callback(new Blob(["png"], { type: "image/png" })),
+  });
+
+  await draw(1);
+  await click("Bắt đầu giải nghĩa");
+  await click("Xem lá 1");
+  await click("Kết luận");
+  const readingDialog = dialog();
+  const downloadButton = readingDialog?.querySelector<HTMLButtonElement>(".flow-actions button");
+  assert.ok(downloadButton);
+  downloadButton.focus();
+  await act(async () => { downloadButton.click(); await new Promise((resolve) => setTimeout(resolve, 20)); });
+  const donation = document.querySelector<HTMLElement>('[aria-labelledby="donation-title"]');
+  assert.ok(donation);
+  assert.equal(download.mock.calls.length, 1);
+  assert.match(donation.querySelector("img")?.getAttribute("src") ?? "", /splash\/qr_donate\.jpg$/);
+  assert.equal(container.querySelector("#reading-result .donation-dialog"), null);
+  assert.equal(readingDialog?.parentElement?.hasAttribute("inert"), true);
+  assert.equal(document.activeElement, donation.querySelector(".modal-close"));
+  const last = donation.querySelector<HTMLButtonElement>(".donation-thanks");
+  assert.ok(last);
+  last.focus();
+  await act(async () => { window.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", cancelable: true })); });
+  assert.equal(document.activeElement, donation.querySelector(".modal-close"));
+  await act(async () => {
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  });
+  assert.equal(document.querySelector(".donation-dialog"), null);
+  assert.ok(readingDialog?.isConnected);
+  assert.equal(document.activeElement, downloadButton);
+  assert.equal(readingDialog?.parentElement?.hasAttribute("inert"), false);
+  await act(async () => { downloadButton.click(); await new Promise((resolve) => setTimeout(resolve, 20)); });
+  assert.ok(document.querySelector(".donation-dialog"));
+  assert.equal(download.mock.calls.length, 2);
+  await click("Cảm ơn bạn · Tiếp tục khám phá");
+  assert.equal(document.querySelector(".donation-dialog"), null);
+  await click("Đóng giải nghĩa");
+  assert.equal(document.body.style.overflow, "");
+
+  capture.mockRejectedValueOnce(new Error("Không tạo được ảnh PNG."));
+  await click("Tải ảnh kết quả");
+  assert.equal(document.querySelector(".donation-dialog"), null);
+  assert.match(container.querySelector('[role="alert"]')?.textContent ?? "", /Không tạo được ảnh PNG/);
+  await click("Tải ảnh kết quả");
+  assert.ok(document.querySelector(".donation-dialog"));
+  await act(async () => { document.querySelector(".donation-qr img")?.dispatchEvent(new Event("error")); });
+  assert.match(document.querySelector('.donation-dialog [role="alert"]')?.textContent ?? "", /Không tải được mã QR/);
+  await act(async () => { document.querySelector<HTMLElement>(".donation-backdrop")?.click(); });
+  assert.equal(document.querySelector(".donation-dialog"), null);
+  assert.equal(requests.length, 1);
 });

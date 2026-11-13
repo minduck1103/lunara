@@ -238,6 +238,31 @@ button.reading-card:hover { transform: translateY(-4px); opacity: 1; }
 .keyword-label.reversed { color: #c9b5ff; }
 .modal-close { position: absolute; top: 10px; right: 12px; z-index: 1; width: 36px; height: 36px; border: 0; border-radius: 50%; background: rgba(255, 255, 255, .08); font-size: 20px; }
 
+.donation-backdrop { z-index: 30; overflow-y: auto; place-items: start center; }
+.donation-dialog { position: relative; width: min(590px, 100%); margin: auto 0; padding: 38px clamp(18px, 5vw, 40px) 20px; border: 1px solid var(--gold-soft); border-radius: 26px; background: radial-gradient(ellipse at 50% 20%, rgba(119, 70, 177, .2), transparent 60%), #151127; box-shadow: 0 24px 90px rgba(0, 0, 0, .5), 0 0 40px rgba(139, 92, 246, .12); text-align: center; }
+.donation-dialog > .eyebrow { font-size: 10px; letter-spacing: .16em; }
+.donation-dialog h2 { margin: 10px 0 8px; color: var(--gold-bright); font-family: var(--serif); font-size: clamp(26px, 5vw, 34px); font-weight: 600; line-height: 1.2; }
+.donation-dialog h2 span { font-size: 20px; }
+.donation-art { position: relative; height: 110px; width: 220px; margin: 12px auto; overflow: hidden; border-radius: 18px; background: radial-gradient(ellipse at center bottom, rgba(217, 184, 113, .2), transparent 65%); }
+.donation-orbit { position: absolute; top: 0; left: 0; width: 100%; color: var(--gold-bright); font-size: 48px; line-height: 1; text-shadow: 0 0 24px rgba(217, 184, 113, .6); }
+.donation-fan { position: absolute; bottom: -16px; left: 50%; display: flex; transform: translateX(-50%); }
+.donation-fan i { display: grid; width: 48px; height: 78px; place-items: center; border: 1px solid var(--gold); border-radius: 7px; background: linear-gradient(150deg, #432961, #151127); color: var(--gold-bright); font-size: 27px; font-style: normal; box-shadow: inset 0 0 0 4px #251a3b, inset 0 0 0 5px var(--gold-soft), 0 0 20px rgba(217, 184, 113, .15); }
+.donation-fan i:first-child { transform: translate(10px, 12px) rotate(-23deg); }
+.donation-fan i:last-child { transform: translate(-10px, 12px) rotate(23deg); }
+.donation-fan i:nth-child(2) { z-index: 1; }
+.donation-dialog h3 { margin: 8px 0; font-family: var(--serif); font-size: 25px; font-weight: 600; }
+.donation-dialog > p { font-size: 13px; line-height: 1.8; }
+#donation-description { margin: 0 auto 18px; max-width: 440px; color: var(--muted); }
+.donation-qr { width: min(236px, 100%); margin: 0 auto; padding: 12px; border-radius: 18px; background: #fff; color: #242032; box-shadow: 0 0 32px rgba(217, 184, 113, .09); }
+.donation-qr img { display: block; width: 100%; height: auto; border-radius: 8px; }
+.donation-qr figcaption { margin-top: 10px; font-size: 13px; font-weight: 600; }
+.donation-qr figcaption span { display: block; margin-top: 5px; color: #70687b; font-size: 10px; font-weight: 400; }
+.donation-gratitude { margin: 16px 0 12px; color: var(--gold-bright); }
+.donation-gratitude span { color: #f39aba; }
+.donation-thanks { width: 100%; justify-content: center; border: 1px solid #a48ac9; background: linear-gradient(110deg, #76549e, #8867ac); color: #fff; font-size: 13px; }
+.donation-thanks:hover { background: #9673bd; }
+.donation-dialog > .donation-footnote { margin: 10px 0 0; color: var(--muted); font-size: 11px; }
+
 /* Misc */
 .error-message { display: flex; align-items: center; gap: 10px; margin: 0 20px 20px; border: 1px solid rgba(248, 113, 113, .35); border-radius: 12px; padding: 10px 14px; background: rgba(127, 29, 29, .25); color: #fecaca; font-size: 13px; }
 .error-message > span { display: grid; width: 20px; height: 20px; place-items: center; border-radius: 50%; background: #b91c1c; font-weight: 700; }

@@ -49,6 +49,14 @@ Chụp toàn bộ `#reading-result`, không bao gồm hộp thoại, hero/danh m
 - Báo lỗi khi ảnh hoặc PNG không tạo được; cho thử lại.
 - Khóa thao tác thay đổi nội dung trong lúc xuất.
 
+## Lời mời ủng hộ
+
+Sau mỗi lần tạo PNG thành công và kích hoạt tải xuống (từ trang hoặc hộp thoại giải nghĩa), mở hộp thoại cảm ơn với mã QR và lời mời ủng hộ tự nguyện. Không hiển thị nếu xuất ảnh lỗi, không yêu cầu chuyển khoản để tải ảnh, không xác nhận giao dịch.
+
+Ảnh QR nguồn nằm tại `public/splash/qr_donate.jpg`; Vite sao chép vào `dist` khi build. Không đặt ảnh nguồn chỉ trong `dist` vì thư mục này được tạo lại.
+
+Hộp thoại tông tím/gold, minh họa tarot bằng CSS, QR nền trắng không cắt ảnh. Có nút đóng, nút tiếp tục, Escape và chạm nền; giữ focus, khóa tương tác nền, trả về kết quả đã có khi đóng. Không đưa lời mời hoặc QR vào PNG.
+
 ## Trạng thái ngoại lệ
 
 - Chưa có key/quota/mạng/response sai: thông báo trung tính, **Thử lại giải nghĩa**; không hiện kết quả giả.

@@ -39,6 +39,8 @@ function App() {
   const [error, setError] = useState("");
   const [isExporting, setIsExporting] = useState(false);
   const [canExport, setCanExport] = useState(false);
+  const [donationOpen, setDonationOpen] = useState(false);
+  const donationReturnFocusRef = useRef<Element | null>(null);
   const resultRef = useRef<HTMLDivElement>(null);
   const [cardSearch, setCardSearch] = useState("");
   const [suitFilter, setSuitFilter] = useState("all");
@@ -120,6 +122,7 @@ function App() {
 
   async function downloadResult() {
     if (!resultRef.current || !canExport || isExporting || !reading) return;
+    donationReturnFocusRef.current = document.activeElement;
     setIsExporting(true);
     setError("");
     try {
@@ -156,6 +159,7 @@ function App() {
       link.click();
       link.remove();
       window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      setDonationOpen(true);
     } catch (caught) {
       setError(caught instanceof Error ? `Không tải được ảnh: ${caught.message}` : "Không tải được ảnh kết quả. Vui lòng thử lại.");
     } finally {
@@ -168,7 +172,7 @@ function App() {
   }
 
   return (
-    <main>
+    <main inert={donationOpen}>
       <header className="topbar shell">
         <a className="brand" href="#" onClick={(event) => {
           if (isExporting) event.preventDefault();
@@ -271,7 +275,7 @@ function App() {
               <button className="text-button" onClick={revealAll}>Lật tất cả</button>
             </div>}
             {allRevealed && <Interpretation key={reading.id} reading={reading} onComplete={setCanExport}
-              exporting={isExporting} canExport={canExport} onDownload={downloadResult} />}
+              exporting={isExporting} canExport={canExport} onDownload={downloadResult} overlayOpen={donationOpen} />}
             <p className="export-disclaimer">Tarot mang tính giải trí & suy ngẫm, không thay thế tư vấn chuyên môn.</p>
             <div className="flow-actions center" data-html2canvas-ignore>
               {canExport && <button className="button button-gold" onClick={downloadResult} disabled={isExporting}>{isExporting ? "Đang tạo ảnh…" : "↓ Tải ảnh kết quả"}</button>}
@@ -311,8 +315,65 @@ function App() {
       </footer>
 
       {previewCard && <CardModal card={previewCard} onClose={() => setPreviewCard(null)} />}
+      {donationOpen && <DonationModal onClose={() => setDonationOpen(false)} returnFocus={donationReturnFocusRef.current} />}
     </main>
   );
+}
+
+function DonationModal({ onClose, returnFocus }: { onClose: () => void; returnFocus: Element | null }) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const [qrError, setQrError] = useState(false);
+
+  useEffect(() => {
+    const previousFocus = returnFocus;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    dialogRef.current?.querySelector<HTMLButtonElement>(".modal-close")?.focus({ preventScroll: true });
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") { event.preventDefault(); onClose(); }
+      if (event.key !== "Tab") return;
+      const buttons = dialogRef.current?.querySelectorAll<HTMLButtonElement>("button");
+      if (!buttons?.length) return;
+      const first = buttons[0];
+      const last = buttons[buttons.length - 1];
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    };
+    window.addEventListener("keydown", handleKey);
+    return () => {
+      window.removeEventListener("keydown", handleKey);
+      document.body.style.overflow = previousOverflow;
+      window.setTimeout(() => {
+        if (previousFocus instanceof HTMLElement && previousFocus.isConnected) previousFocus.focus({ preventScroll: true });
+      });
+    };
+  }, []);
+
+  return createPortal(<div className="modal-backdrop donation-backdrop" onClick={onClose}>
+    <div className="donation-dialog" ref={dialogRef} role="dialog" aria-modal="true"
+      aria-labelledby="donation-title" aria-describedby="donation-description" onClick={(event) => event.stopPropagation()}>
+      <button className="modal-close" onClick={onClose} aria-label="Đóng lời mời ủng hộ">×</button>
+      <span className="eyebrow">MỘT CHÚT YÊU THƯƠNG CHO LUNARA</span>
+      <h2 id="donation-title">Cảm ơn bạn đã ghé thăm <span aria-hidden="true">✦</span></h2>
+      <div className="donation-art" aria-hidden="true">
+        <span className="donation-orbit">☾</span>
+        <div className="donation-fan"><i>✧</i><i>✳</i><i>✧</i></div>
+      </div>
+      <h3>Mời Lunara một ly cà phê nhé!</h3>
+      <p id="donation-description">Nếu trải bài vừa rồi mang đến cho bạn một chút cảm hứng hay sự đồng cảm,
+        bạn có thể gửi một lời động viên để Lunara tiếp tục phát triển.</p>
+      <figure className="donation-qr">
+        {qrError
+          ? <p role="alert">Không tải được mã QR. Bạn hãy đóng hộp thoại và thử lại nhé.</p>
+          : <img src={`${import.meta.env.BASE_URL}splash/qr_donate.jpg`} alt="Mã QR chuyển khoản ủng hộ Lunara"
+            onError={() => setQrError(true)} />}
+        <figcaption>Quét mã QR để ủng hộ <span>Hoàn toàn tự nguyện · Một chút cũng thật quý</span></figcaption>
+      </figure>
+      <p className="donation-gratitude">Mỗi sự ủng hộ đều là động lực để Lunara tỏa sáng hơn <span aria-hidden="true">♥</span></p>
+      <button className="button donation-thanks" onClick={onClose}>Cảm ơn bạn · Tiếp tục khám phá <span aria-hidden="true">✧</span></button>
+      <p className="donation-footnote">Bạn luôn có thể tiếp tục mà không cần ủng hộ.</p>
+    </div>
+  </div>, document.body);
 }
 
 function CardModal({ card, onClose }: { card: TarotCard; onClose: () => void }) {
@@ -366,12 +427,13 @@ function CardMeaning({ reading, result, index }: { reading: ReadingState; result
   </article>;
 }
 
-function Interpretation({ reading, onComplete, exporting, canExport, onDownload }: {
+function Interpretation({ reading, onComplete, exporting, canExport, onDownload, overlayOpen }: {
   reading: ReadingState;
   onComplete: (complete: boolean) => void;
   exporting: boolean;
   canExport: boolean;
   onDownload: () => void;
+  overlayOpen: boolean;
 }) {
   const [result, setResult] = useState<InterpretationResult | null>(null);
   const [pending, setPending] = useState(false);
@@ -392,15 +454,15 @@ function Interpretation({ reading, onComplete, exporting, canExport, onDownload 
   }, []);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || overlayOpen) return;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     dialogRef.current?.querySelector<HTMLElement>(".reading-card, .modal-close")?.focus({ preventScroll: true });
     return () => { document.body.style.overflow = previousOverflow; };
-  }, [open]);
+  }, [open, overlayOpen]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || overlayOpen) return;
     const handleKey = (event: KeyboardEvent) => {
       if (event.key === "Escape" && !exporting) closeDialog();
       if (event.key !== "Tab" || !dialogRef.current) return;
@@ -413,7 +475,7 @@ function Interpretation({ reading, onComplete, exporting, canExport, onDownload 
     };
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
-  }, [open, exporting]);
+  }, [open, exporting, overlayOpen]);
 
   useEffect(() => {
     if (showConclusion) conclusionRef.current?.scrollIntoView?.({ behavior: "smooth", block: "start" });
@@ -526,7 +588,8 @@ function Interpretation({ reading, onComplete, exporting, canExport, onDownload 
       </>}
     </div>}
 
-    {open && result && createPortal(<div className="modal-backdrop reading-backdrop" onClick={() => { if (!exporting) closeDialog(); }}>
+    {open && result && createPortal(<div className="modal-backdrop reading-backdrop" inert={overlayOpen}
+      aria-hidden={overlayOpen || undefined} onClick={() => { if (!exporting && !overlayOpen) closeDialog(); }}>
       <div className="reading-dialog" role="dialog" aria-modal="true" aria-labelledby="reading-dialog-title"
         ref={dialogRef} onClick={(event) => event.stopPropagation()}>
         <button className="modal-close" onClick={closeDialog} disabled={exporting} aria-label="Đóng giải nghĩa">×</button>
